@@ -11,7 +11,7 @@ namespace MigraDoc.Extensions.Html
     {
         private IDictionary<string, Func<HtmlNode, DocumentObject, DocumentObject>> nodeHandlers
             = new Dictionary<string, Func<HtmlNode, DocumentObject, DocumentObject>>();
-           
+
         public HtmlConverter()
         {
             AddDefaultNodeHandlers();
@@ -24,7 +24,7 @@ namespace MigraDoc.Extensions.Html
                 return nodeHandlers;
             }
         }
-        
+
         public Action<Section> Convert(string contents)
         {
             return section => ConvertHtml(contents, section);
@@ -56,7 +56,7 @@ namespace MigraDoc.Extensions.Html
                 {
                     // pass the current container or section
                     var result = nodeHandler(node, current ?? section);
-                    
+
                     if (node.HasChildNodes)
                     {
                         ConvertHtmlNodes(node.ChildNodes, section, result);
@@ -71,11 +71,11 @@ namespace MigraDoc.Extensions.Html
                 }
             }
         }
-        
+
         private void AddDefaultNodeHandlers()
         {
             // Block Elements
-            
+
             // could do with a predicate/regex matcher so we could just use one handler for all headings
             nodeHandlers.Add("h1", AddHeading);
             nodeHandlers.Add("h2", AddHeading);
@@ -95,19 +95,32 @@ namespace MigraDoc.Extensions.Html
             nodeHandlers.Add("i", (node, parent) => AddFormattedText(node, parent, TextFormat.Italic));
             nodeHandlers.Add("em", (node, parent) => AddFormattedText(node, parent, TextFormat.Italic));
             nodeHandlers.Add("u", (node, parent) => AddFormattedText(node, parent, TextFormat.Underline));
+            nodeHandlers.Add("sup", (node, parent) =>
+            {
+                var formattedText = (FormattedText)AddFormattedText(node, parent);
+                formattedText.Superscript = true;
+                return formattedText;
+            });
+            nodeHandlers.Add("sub", (node, parent) =>
+            {
+                var formattedText = (FormattedText)AddFormattedText(node, parent);
+                formattedText.Subscript = true;
+                return formattedText;
+            });
             nodeHandlers.Add("a", (node, parent) =>
             {
                 return GetParagraph(parent).AddHyperlink(node.GetAttributeValue("href", ""), HyperlinkType.Web);
             });
             nodeHandlers.Add("hr", (node, parent) => GetParagraph(parent).SetStyle("HorizontalRule"));
-            nodeHandlers.Add("br", (node, parent) => {
+            nodeHandlers.Add("br", (node, parent) =>
+            {
                 if (parent is FormattedText)
                 {
                     // inline elements can contain line breaks
                     ((FormattedText)parent).AddLineBreak();
                     return parent;
                 }
-                                
+
                 var paragraph = GetParagraph(parent);
                 paragraph.AddLineBreak();
                 return paragraph;
@@ -121,7 +134,7 @@ namespace MigraDoc.Extensions.Html
 
                 var section = (Section)parent;
                 var isFirst = node.ParentNode.Elements("li").First() == node;
-                var isLast = node.ParentNode.Elements("li").Last() == node; 
+                var isLast = node.ParentNode.Elements("li").Last() == node;
 
                 // if this is the first item add the ListStart paragraph
                 if (isFirst)
@@ -155,7 +168,7 @@ namespace MigraDoc.Extensions.Html
 
                 // decode escaped HTML
                 innerText = WebUtility.HtmlDecode(innerText);
-                
+
                 // text elements must be wrapped in a paragraph but this could also be FormattedText or a Hyperlink!!
                 // this needs some work
                 if (parent is FormattedText)
@@ -172,16 +185,18 @@ namespace MigraDoc.Extensions.Html
             });
         }
 
-        private static DocumentObject AddFormattedText(HtmlNode node, DocumentObject parent, TextFormat format)
+        private static DocumentObject AddFormattedText(HtmlNode node, DocumentObject parent, TextFormat? format = null)
         {
             var formattedText = parent as FormattedText;
             if (formattedText != null)
             {
-                return formattedText.Format(format);
+                return format.HasValue ? formattedText.Format(format.Value) : formattedText;
             }
 
             // otherwise parent is paragraph or section
-            return GetParagraph(parent).AddFormattedText(format);
+            return format.HasValue ?
+                GetParagraph(parent).AddFormattedText(format.Value) :
+                GetParagraph(parent).AddFormattedText();
         }
 
         private static DocumentObject AddHeading(HtmlNode node, DocumentObject parent)
@@ -194,7 +209,7 @@ namespace MigraDoc.Extensions.Html
             return parent as Paragraph ?? ((Section)parent).AddParagraph();
         }
 
-        private static Paragraph AddParagraphWithStyle(DocumentObject parent, string style) 
+        private static Paragraph AddParagraphWithStyle(DocumentObject parent, string style)
         {
             return ((Section)parent).AddParagraph().SetStyle(style);
         }
